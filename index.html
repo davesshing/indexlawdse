@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DSE 指數律大挑戰 V2 · 自適應研習版</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
+<style>
+*{box-sizing:border-box}html,body,#root{margin:0;width:100%;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f1f5f9;color:#0f172a;overscroll-behavior:none}
+button{-webkit-tap-highlight-color:transparent}::-webkit-scrollbar{width:0;height:0}
+@keyframes pop{0%{transform:scale(.96);opacity:.4}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.pop{animation:pop .18s ease-out}.shake{animation:shake .25s ease-in-out}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useMemo,useRef}=React;
+
+const Icon=({children,size=20,className=""})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
+const I={
+book:p=><Icon {...p}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></Icon>,
+trophy:p=><Icon {...p}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v7a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4"/><path d="M17 6h3v2a4 4 0 0 1-4 4"/></Icon>,
+chart:p=><Icon {...p}><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 3-4 3 2 5-7"/></Icon>,
+bulb:p=><Icon {...p}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.3 14.5A6 6 0 1 1 15.7 14.5C15 15.2 14.6 16 14.5 17h-5c-.1-1-.5-1.8-1.2-2.5Z"/></Icon>,
+arrow:p=><Icon {...p}><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></Icon>,
+del:p=><Icon {...p}><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></Icon>
+};
+
+const Latex=({content,className=""})=>{
+ const ref=useRef(null);
+ useEffect(()=>{if(ref.current&&window.katex){try{window.katex.render(content||"",ref.current,{throwOnError:false})}catch(e){ref.current.textContent=content||""}}},[content]);
+ return <span ref={ref} className={className}>{content}</span>
+};
+const Mixed=({text})=>!text?null:<span>{text.split(/(\$.*?\$)/g).map((p,i)=>p.startsWith("$")&&p.endsWith("$")?<Latex key={i} content={p.slice(1,-1)}/>:<span key={i}>{p}</span>)}</span>;
+const r=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+const rNonZero=(min,max)=>{let v=0;while(v===0)v=r(min,max);return v;};
+
+const formatInputToLatex=(str)=>{
+ if(!str)return "";
+ const formatExp=(s)=>s.replace(/\^(\d+)/g,"^{$1}");
+ if(str.includes("/")){
+   const parts=str.split("/");
+   const num=formatExp(parts[0]||"");
+   const den=formatExp(parts.slice(1).join("/")||"");
+   return `\\frac{${num}}{${den}}`;
+ }
+ return formatExp(str);
+};
+
+const generateIndicesQuestion = (level) => {
+    const varPairs = [ ['x', 'y'], ['m', 'n'], ['u', 'v'], ['a', 'b'] ];
+    const [v1, v2] = varPairs[Math.floor(Math.random() * varPairs.length)];
+
+    let latex = "", hint = "", steps = [], ans = "";
+
+    if (level === 'basic') {
+        const p = r(2, 4);
+        const q = rNonZero(-3, 3);
+        const rPow = r(2, 3);
+        const d = r(1, 4);
+
+        const numExp1 = p * rPow;
+        const numExp2 = q * rPow;
+
+        latex = `\\frac{(${v1}^{${p}} ${v2}^{${q}})^{${rPow}}}{${v1}^{${d}}}`;
+        hint = `先運用指數律 $(a^p b^q)^r = a^{pr} b^{qr}$ 展開分子括號，再進行同底數相除。`;
+
+        const step1 = `展開分子括號：$= \\frac{${v1}^{${numExp1}} ${v2}^{${numExp2}}}{${v1}^{${d}}}$`;
+        
+        let finalNum = "", finalDen = "";
+        const netV1 = numExp1 - d;
+        
+        if (netV1 > 0) finalNum += `${v1}^{${netV1}}`;
+        else if (netV1 < 0) finalDen += `${v1}^{${Math.abs(netV1)}}`;
+
+        if (numExp2 > 0) finalNum += `${v2}^{${numExp2}}`;
+        else if (numExp2 < 0) finalDen += `${v2}^{${Math.abs(numExp2)}}`;
+
+        if (!finalNum) finalNum = "1";
+        ans = finalDen ? `\\frac{${finalNum}}{${finalDen}}` : finalNum;
+
+        steps = [
+            step1,
+            `化簡同底數 ${v1}：$${v1}^{${numExp1}-${d}} = ${v1}^{${netV1}}$`,
+            numExp2 < 0 ? `將負指數 $${v2}^{${numExp2}}$ 移至分母轉為正指數 $${v2}^{${Math.abs(numExp2)}}$` : `整理項次`,
+            `$= ${ans}$`
+        ];
+
+    } else if (level === 'dse') {
+        const type = r(1, 3); 
+
+        if (type === 1) {
+            const a = r(1, 4);
+            const b = rNonZero(-4, 4);
+            const c = r(2, 3);
+            const d = rNonZero(-4, 4);
+            const e = rNonZero(-4, 4);
+
+            const numV1 = a * c;
+            const numV2 = b * c;
+
+            latex = `\\frac{(${v1}^{${a}} ${v2}^{${b}})^{${c}}}{${v1}^{${d}} ${v2}^{${e}}}`;
+            hint = `DSE 解法：1. 先展開分子括號 $(${v1}^{${a}} ${v2}^{${b}})^{${c}}$； 2. 再進行同底數相除及整理正指數。`;
+
+            const netV1 = numV1 - d;
+            const netV2 = numV2 - e;
+
+            let top = "", bottom = "";
+            if (netV1 > 0) top += `${v1}^{${netV1}}`;
+            else if (netV1 < 0) bottom += `${v1}^{${Math.abs(netV1)}}`;
+
+            if (netV2 > 0) top += `${v2}^{${netV2}}`;
+            else if (netV2 < 0) bottom += `${v2}^{${Math.abs(netV2)}}`;
+
+            if (!top) top = "1";
+            ans = bottom ? `\\frac{${top}}{${bottom}}` : top;
+
+            steps = [
+                `展開分子括號：$= \\frac{${v1}^{${numV1}} ${v2}^{${numV2}}}{${v1}^{${d}} ${v2}^{${e}}}$`,
+                `計算 ${v1} 的指數：$${numV1} - (${d}) = ${netV1}$`,
+                `計算 ${v2} 的指數：$${numV2} - (${e}) = ${netV2}$`,
+                `正指數表示：$= ${ans}$`
+            ];
+
+        } else if (type === 2) {
+            const a = r(1, 4);
+            const b = rNonZero(-4, 4);
+            const c = r(2, 3);
+            const d = rNonZero(-4, 4);
+            const e = rNonZero(-4, 4);
+
+            const denV1 = a * c;
+            const denV2 = b * c;
+
+            latex = `\\frac{${v1}^{${d}} ${v2}^{${e}}}{(${v1}^{${a}} ${v2}^{${b}})^{${c}}}`;
+            hint = `DSE 解法：1. 先展開分母括號 $(${v1}^{${a}} ${v2}^{${b}})^{${c}}$； 2. 再進行同底數相除及整理正指數。`;
+
+            const netV1 = d - denV1;
+            const netV2 = e - denV2;
+
+            let top = "", bottom = "";
+            if (netV1 > 0) top += `${v1}^{${netV1}}`;
+            else if (netV1 < 0) bottom += `${v1}^{${Math.abs(netV1)}}`;
+
+            if (netV2 > 0) top += `${v2}^{${netV2}}`;
+            else if (netV2 < 0) bottom += `${v2}^{${Math.abs(netV2)}}`;
+
+            if (!top) top = "1";
+            ans = bottom ? `\\frac{${top}}{${bottom}}` : top;
+
+            steps = [
+                `展開分母括號：$= \\frac{${v1}^{${d}} ${v2}^{${e}}}{${v1}^{${denV1}} ${v2}^{${denV2}}}$`,
+                `計算 ${v1} 的指數：$${d} - (${denV1}) = ${netV1}$`,
+                `計算 ${v2} 的指數：$${e} - (${denV2}) = ${netV2}$`,
+                `正指數表示：$= ${ans}$`
+            ];
+
+        } else {
+            const a = r(1, 3);
+            const b = rNonZero(-3, 3);
+            const c = r(2, 3);
+            const d = r(1, 3);
+            const e = rNonZero(-3, 3);
+            const f = r(2, 3);
+
+            const numV1 = a * c;
+            const numV2 = b * c;
+            const denV1 = d * f;
+            const denV2 = e * f;
+
+            latex = `\\frac{(${v1}^{${a}} ${v2}^{${b}})^{${c}}}{(${v1}^{${d}} ${v2}^{${e}})^{${f}}}`;
+            hint = `DSE 解法：1. 分別展開分子與分母的括號； 2. 再將同底數指數相減或整理正指數。`;
+
+            const netV1 = numV1 - denV1;
+            const netV2 = numV2 - denV2;
+
+            let top = "", bottom = "";
+            if (netV1 > 0) top += `${v1}^{${netV1}}`;
+            else if (netV1 < 0) bottom += `${v1}^{${Math.abs(netV1)}}`;
+
+            if (netV2 > 0) top += `${v2}^{${netV2}}`;
+            else if (netV2 < 0) bottom += `${v2}^{${Math.abs(netV2)}}`;
+
+            if (!top) top = "1";
+            ans = bottom ? `\\frac{${top}}{${bottom}}` : top;
+
+            steps = [
+                `展開分子及分母括號：$= \\frac{${v1}^{${numV1}} ${v2}^{${numV2}}}{${v1}^{${denV1}} ${v2}^{${denV2}}}$`,
+                `計算 ${v1} 的指數：$${numV1} - (${denV1}) = ${netV1}$`,
+                `計算 ${v2} 的指數：$${numV2} - (${denV2}) = ${netV2}$`,
+                `正指數表示：$= ${ans}$`
+            ];
+        }
+
+    } else {
+        const coeffNum = [2, 3, 4][Math.floor(Math.random() * 3)];
+        const cPow = r(2, 3);
+        const coeffDen = Math.pow(coeffNum, cPow - 1);
+        
+        const a = rNonZero(-3, 4);
+        const b = r(2, 4);
+        const d = r(1, 3);
+        const e = rNonZero(-4, -1);
+
+        const numA = a * cPow;
+        const numB = b * cPow;
+        const numCoeff = Math.pow(coeffNum, cPow);
+
+        latex = `\\frac{(${coeffNum} ${v1}^{${a}} ${v2}^{${b}})^{${cPow}}}{${coeffDen} ${v1}^{${d}} ${v2}^{${e}}}`;
+        hint = `注意數字係數！$(${coeffNum})^{${cPow}} = ${numCoeff}$，數字部分可與分母 $${coeffDen}$ 約分。`;
+
+        const finalCoeff = numCoeff / coeffDen;
+        const netV1 = numA - d;
+        const netV2 = numB - e;
+
+        let topVars = "", botVars = "";
+        if (netV1 > 0) topVars += `${v1}^{${netV1}}`;
+        else if (netV1 < 0) botVars += `${v1}^{${Math.abs(netV1)}}`;
+
+        if (netV2 > 0) topVars += `${v2}^{${netV2}}`;
+        else if (netV2 < 0) botVars += `${v2}^{${Math.abs(netV2)}}`;
+
+        let top = `${finalCoeff === 1 && topVars ? '' : finalCoeff}${topVars}`;
+        if (!top) top = "1";
+
+        ans = botVars ? `\\frac{${top}}{${botVars}}` : top;
+
+        steps = [
+            `展開分子括號（包含係數）：$= \\frac{${numCoeff} ${v1}^{${numA}} ${v2}^{${numB}}}{${coeffDen} ${v1}^{${d}} ${v2}^{${e}}}$`,
+            `數字部分約分：$\\frac{${numCoeff}}{${coeffDen}} = ${finalCoeff}$`,
+            `整理未知數正指數：$= ${ans}$`
+        ];
+    }
+
+    return { latex, hint, steps, ans, vars: [v1, v2] };
+};
+
+const normalize=s=>{
+ let x=(s||"").toLowerCase().replace(/\s+/g,"").replace(/\\left|\\right/g,"");
+ x=x.replace(/\^\{(\d+)\}/g,"^$1");
+ x=x.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g,"($1)/($2)");
+ x=x.replace(/\{|\}/g,"").replace(/×/g,"*").replace(/·/g,"*").replace(/−/g,"-");
+ x=x.replace(/\\\{([^{}]+)\\\}/g,"$1").replace(/\^1(?!\d)/g,"");
+ x=x.replace(/\(([^()]+)\)/g,"$1");
+ return x;
+};
+const equivalent=(u,a)=>normalize(u)===normalize(a);
+const classifyError=(raw,q)=>{
+ const s=(raw||"").replace(/\s/g,"");
+ if(!s)return "未作答";
+ if(/\^-/.test(s))return "負指數未轉為正指數";
+ if(q.ans.includes("\\frac")&&!s.includes("/"))return "分式表示未完成";
+ if(/[a-z]\^\d+[a-z]\^\d+/.test(s))return "指數整理可能有誤";
+ if(/[2-9][a-z]/.test(s)&&/\\frac/.test(q.ans))return "係數或約分可能有誤";
+ return "指數運算或完全化簡";
+};
+
+const baseProgress={xp:0,streak:0,bestStreak:0,total:0,correct:0,hints:0,
+ errors:{"負指數未轉為正指數":0,"分式表示未完成":0,"指數整理可能有誤":0,"係數或約分可能有誤":0,"指數運算或完全化簡":0,"未作答":0},
+ skill:{basic:0,dse:0,challenge:0},wrongBook:[],achievements:[]};
+const load=()=>{try{return {...baseProgress,...JSON.parse(localStorage.getItem("dse_indices_v2")||"{}")}}catch(e){return baseProgress}};
+const xpFor=(ok,streak,hint,sec)=>ok?(10+Math.min(streak,10)*2+(hint?0:3)+(sec>0?Math.min(5,Math.floor(sec/10)):0)):0;
+const achievements=[["first","初次通關","完成第一題"],["combo5","🔥 五連勝","連續答對 5 題"],["combo10","🔥🔥 十連勝","連續答對 10 題"],["xp100","⚡ 100 XP","累積 100 XP"]];
+
+function App(){
+ const [screen,setScreen]=useState("home"),[progress,setProgress]=useState(load);
+ const [mode,setMode]=useState("dse"),[q,setQ]=useState(null),[input,setInput]=useState("");
+ const [feedback,setFeedback]=useState(null),[hint,setHint]=useState(false),[attempts,setAttempts]=useState(0);
+ const [history,setHistory]=useState([]),[qno,setQno]=useState(1),[streak,setStreak]=useState(0);
+ const [roundCorrect,setRoundCorrect]=useState(0),[seconds,setSeconds]=useState(0),[expanded,setExpanded]=useState(null);
+
+ useEffect(()=>localStorage.setItem("dse_indices_v2",JSON.stringify(progress)),[progress]);
+ useEffect(()=>{
+   if(screen!=="play"||mode!=="challenge"||seconds<=0)return;
+   const id=setInterval(()=>setSeconds(s=>Math.max(0,s-1)),1000); return()=>clearInterval(id);
+ },[screen,mode,seconds]);
+
+ const adaptive=useMemo(()=>{
+   const a=[["basic",Math.max(1,30-progress.skill.basic)],["dse",Math.max(2,55-progress.skill.dse)],["challenge",Math.max(1,25-progress.skill.challenge)]];
+   let n=Math.random()*a.reduce((s,x)=>s+x[1],0); for(const [k,w] of a){n-=w;if(n<=0)return k} return "dse";
+ },[progress.skill]);
+
+ const start=(m="dse",boss=false)=>{
+   const chosen=m==="adaptive"?adaptive:m;
+   setMode(boss?"challenge":chosen);setHistory([]);setQno(1);setInput("");setFeedback(null);setHint(false);
+   setAttempts(0);setStreak(0);setRoundCorrect(0);setSeconds(boss?180:0);
+   setQ(generateIndicesQuestion(boss?"challenge":chosen));setScreen("play");
+ };
+ const next=()=>{
+   setQno(n=>n+1);setInput("");setFeedback(null);setHint(false);setAttempts(0);
+   setQ(generateIndicesQuestion(mode));
+ };
+ const key=v=>{
+   if(feedback?.type==="success")return;
+   if(v==="DEL")setInput(x=>x.slice(0,-1));else if(v==="AC")setInput("");
+   else if(v==="frac")setInput(x=>x+"/");else setInput(x=>x+v);
+ };
+
+ const submit=()=>{
+   if(!q||feedback?.type==="success"||(mode==="challenge"&&seconds===0))return;
+   const ok=equivalent(input,q.ans),err=ok?null:classifyError(input,q);
+   const isFirstAttempt = (attempts === 0);
+   const nextAttempts = attempts + 1;
+   setAttempts(nextAttempts);
+
+   if (isFirstAttempt) {
+     // 僅在第一次作答時紀錄統計數據
+     const ns = ok ? streak + 1 : 0;
+     const gained = xpFor(ok, ns, hint, seconds);
+     setStreak(ns);
+     if (ok) setRoundCorrect(x => x + 1);
+
+     setFeedback(ok ? { type: "success", msg: `答對！ +${gained} XP` } : { type: "error", msg: err });
+     setHistory(h => [...h, { qno, latex: q.latex, userAns: input || "(未作答)", correct: ok, error: err, steps: q.steps, ans: q.ans }]);
+
+     setProgress(p => {
+       const skill = { ...p.skill, [mode]: Math.max(0, Math.min(100, p.skill[mode] + (ok ? 4 : -2))) };
+       let np = {
+         ...p,
+         total: p.total + 1,
+         correct: p.correct + (ok ? 1 : 0),
+         xp: p.xp + gained,
+         streak: ns,
+         bestStreak: Math.max(p.bestStreak, ns),
+         hints: p.hints + (hint ? 1 : 0),
+         skill,
+         errors: { ...p.errors }
+       };
+
+       if (!ok) {
+         np.errors[err] = (np.errors[err] || 0) + 1;
+         np.wrongBook = [...p.wrongBook, { latex: q.latex, ans: q.ans, error: err, mode, steps: q.steps }].slice(-40);
+       }
+
+       let ach = [...p.achievements];
+       if (np.total >= 1 && !ach.includes("first")) ach.push("first");
+       if (ns >= 5 && !ach.includes("combo5")) ach.push("combo5");
+       if (ns >= 10 && !ach.includes("combo10")) ach.push("combo10");
+       if (np.xp >= 100 && !ach.includes("xp100")) ach.push("xp100");
+       np.achievements = ach;
+
+       return np;
+     });
+   } else {
+     // 第二次補答：僅提示對錯，不重覆增加總題數或錯誤次數
+     if (ok) {
+       setFeedback({ type: "success", msg: "修正正確！" });
+     } else {
+       setFeedback({ type: "error", msg: err });
+     }
+   }
+ };
+
+ const accuracy=progress.total?Math.round(progress.correct/progress.total*100):0;
+
+ const Header=()=> <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between shrink-0">
+   <button onClick={()=>setScreen("home")} className="flex items-center gap-2 font-black text-indigo-700"><I.book size={21}/> DSE 指數律 V2</button>
+   <div className="flex gap-2 text-xs font-black"><span className="bg-orange-50 text-orange-700 px-2 py-1 rounded-full">⚡ {progress.xp} XP</span><span className="bg-rose-50 text-rose-600 px-2 py-1 rounded-full">🔥 {progress.bestStreak}</span></div>
+ </header>;
+
+ const Skill=({name,val})=><div><div className="flex justify-between text-xs font-bold mb-1"><span>{name}</span><span>{val}%</span></div><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 rounded-full" style={{width:`${val}%`}}/></div></div>;
+
+ const Home=()=> <div className="flex-1 overflow-y-auto p-4 space-y-4">
+   <section className="bg-gradient-to-br from-indigo-700 to-violet-600 text-white rounded-3xl p-5 shadow-lg">
+     <div className="text-xs opacity-75 font-bold">ADAPTIVE DSE TRAINER</div><h1 className="text-2xl font-black mt-1">針對弱項，智能練習。</h1>
+     <p className="text-sm opacity-85 mt-2">系統根據你的答題表現自動調整題型與難度比例，並保存錯題紀錄。</p>
+   </section>
+   <section className="grid grid-cols-3 gap-2">{[
+     [progress.total,"完成題數"],[accuracy+"%","正確率"],[progress.wrongBook.length,"錯題數"]
+   ].map((x,i)=><div key={i} className="bg-white rounded-2xl p-3 border border-slate-200"><div className="text-xl font-black">{x[0]}</div><div className="text-[11px] text-slate-400">{x[1]}</div></div>)}</section>
+   <div className="grid grid-cols-2 gap-3">
+     <button onClick={()=>start("basic")} className="bg-white border-2 border-green-100 hover:border-green-300 rounded-2xl p-4 text-left transition"><div className="text-green-600 font-black">🌱 初階</div><div className="text-xs text-slate-500 mt-1">建立基本功</div></button>
+     <button onClick={()=>start("dse")} className="bg-white border-2 border-indigo-100 hover:border-indigo-300 rounded-2xl p-4 text-left transition"><div className="text-indigo-600 font-black">⚡ DSE</div><div className="text-xs text-slate-500 mt-1">主力綜合題</div></button>
+     <button onClick={()=>start("challenge",true)} className="bg-slate-900 text-white rounded-2xl p-4 text-left transition"><div className="text-orange-400 font-black">🔥 Boss Challenge</div><div className="text-xs text-slate-300 mt-1">180 秒限時挑戰</div></button>
+     <button onClick={()=>start("adaptive")} className="bg-indigo-600 text-white rounded-2xl p-4 text-left shadow-sm transition"><div className="font-black">🤖 智能訓練</div><div className="text-xs text-indigo-100 mt-1">根據弱項派題</div></button>
+   </div>
+   <div className="grid grid-cols-2 gap-3"><button onClick={()=>setScreen("wrong")} className="bg-white border border-slate-200 rounded-xl py-3 font-bold text-sm">📕 錯題簿</button><button onClick={()=>setScreen("stats")} className="bg-white border border-slate-200 rounded-xl py-3 font-bold text-sm">📊 學習報告</button></div>
+ </div>;
+
+ const Keyboard=()=>{
+   const v=q?.vars||["x","y"],keys=[v[0],v[1],"^","frac","7","8","9","AC","4","5","6","DEL","1","2","3","0"];
+   return <div className="grid grid-cols-4 gap-1.5 mt-2">{keys.map((k,i)=><button key={i} onClick={()=>key(k==="frac"?"frac":k)} className={`h-12 rounded-xl font-bold text-xl sm:text-2xl border-b-2 active:translate-y-[1px] flex items-center justify-center ${k==="AC"?"bg-red-50 text-red-600 border-red-100":k==="DEL"?"bg-slate-200 text-slate-700 border-slate-300":i<4?"bg-indigo-50 text-indigo-700 border-indigo-100":"bg-white text-indigo-700 border-slate-200"}`}>{k==="frac"?<Latex content="\frac{a}{b}"/>:k==="^"?"xⁿ":k==="DEL"?<I.del size={22}/>:k}</button>)}</div>;
+ };
+
+ const Play=()=> <div className="flex-1 min-h-0 flex flex-col">
+   <div className="px-4 py-2 bg-white border-b border-slate-100 flex justify-between items-center text-xs font-bold shrink-0"><span>第 {qno} 題 · {mode==="challenge"?"🔥 Boss":"智能訓練"}</span><span className="flex gap-2"><b className="text-orange-600">⚡ {progress.xp}</b><b className="text-rose-600">🔥 {streak}</b>{mode==="challenge"&&<b className={seconds<30?"text-red-600":""}>⏱ {seconds}s</b>}<button onClick={()=>setScreen("summary")} className="text-slate-400">結束</button></span></div>
+   <div className="flex-1 overflow-y-auto p-4"><div className="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 p-5">
+     <div className="flex justify-between text-xs font-bold"><span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">化簡以下指數式</span><span className="text-slate-400">答案用正指數</span></div>
+     <div className="my-5 min-h-[88px] bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl"><Latex content={q.latex}/></div>
+     <div className={`min-h-[62px] rounded-2xl border-2 flex items-center justify-center text-xl font-bold font-mono ${feedback?.type==="error"?"border-red-300 bg-red-50 shake":feedback?.type==="success"?"border-green-400 bg-green-50":"border-indigo-400 bg-indigo-50"}`}>{input?<Latex content={formatInputToLatex(input)}/>:<span className="text-slate-400 text-sm">請輸入答案…</span>}</div>
+     {hint&&<div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-sm text-amber-900"><div className="font-black flex gap-2 items-center"><I.bulb size={16}/> 思考提示</div><div className="mt-1"><Mixed text={q.hint}/></div></div>}
+     {feedback?.type==="error"&&<div className="mt-3 bg-red-50 border border-red-200 rounded-2xl p-3"><div className="text-red-700 text-sm font-black">❌ {feedback.msg}</div><div className="text-xs text-red-600 mt-1">{attempts<2?"再試一次；第二次仍錯才顯示完整解析。":"這題已顯示完整解析。"} </div>{attempts>=2&&<div className="mt-3 pt-3 border-t border-red-200 text-xs text-slate-700 space-y-1">{q.steps.map((s,i)=><div key={i}>{i+1}. <Mixed text={s}/></div>)}<div className="font-black mt-2">標準答案： <Latex content={q.ans}/></div></div>}</div>}
+     {feedback?.type==="success"&&<div className="mt-3 bg-green-50 border border-green-200 rounded-2xl p-3 text-green-700 font-black pop"><div>✓ {feedback.msg}</div><div className="text-xs font-medium mt-1">🔥 連勝 {streak} 題</div></div>}
+   </div></div>
+   <div className="bg-white border-t border-slate-200 p-2 shrink-0"><div className="max-w-xl mx-auto flex gap-2">
+     {feedback?.type==="success"?<button onClick={next} className="flex-1 bg-green-600 text-white rounded-xl py-3 font-black">下一題 →</button>:
+      feedback?.type==="error"&&attempts>=2?<button onClick={next} className="flex-1 bg-indigo-600 text-white rounded-xl py-3 font-black">看完解析，下一題</button>:
+      <><button onClick={()=>setHint(true)} className="px-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 font-black text-xs">💡 提示</button><button onClick={submit} className="flex-1 bg-indigo-600 text-white rounded-xl py-3 font-black text-lg">{feedback?.type==="error"?"再試一次":"提交"}</button></>}
+   </div><div className="max-w-xl mx-auto"><Keyboard/></div></div>
+ </div>;
+
+ const Summary=()=>{const acc=history.length?Math.round(history.filter(x=>x.correct).length/history.length*100):0;return <div className="flex-1 overflow-y-auto p-4"><div className="max-w-xl mx-auto space-y-3">
+   <div className="bg-white rounded-3xl border border-slate-200 p-6 text-center"><div className="text-4xl">🏆</div><div className="text-3xl font-black text-indigo-700 mt-1">{acc}%</div><div className="text-xs text-slate-400">本輪正確率</div><div className="grid grid-cols-3 gap-2 mt-5">{[[history.length,"題目"],[roundCorrect,"答對"],[progress.xp,"總 XP"]].map((x,i)=><div key={i} className="bg-slate-50 rounded-xl p-2"><b>{x[0]}</b><small className="block text-slate-400">{x[1]}</small></div>)}</div></div>
+   {history.map((x,i)=><div key={i} className="bg-white rounded-2xl border border-slate-200 p-3"><div className="flex justify-between text-xs font-bold"><span>第 {x.qno} 題</span><span className={x.correct?"text-green-600":"text-red-600"}>{x.correct?"✓ 正確":"✗ "+x.error}</span></div><div className="bg-slate-50 rounded-xl p-3 text-center my-2"><Latex content={x.latex}/></div><button onClick={()=>setExpanded(expanded===i?null:i)} className="text-xs font-bold text-indigo-600">{expanded===i?"收起解析":"查看解析"}</button>{expanded===i&&<div className="mt-2 text-xs space-y-1 text-slate-700">{x.steps.map((s,j)=><div key={j}>{j+1}. <Mixed text={s}/></div>)}<div className="font-black mt-2">答案：<Latex content={x.ans}/></div></div>}</div>)}
+   <button onClick={()=>setScreen("home")} className="w-full bg-slate-900 text-white rounded-xl py-3 font-black">返回主選單</button>
+ </div></div>};
+
+ const Wrong=()=> <div className="flex-1 overflow-y-auto p-4"><div className="max-w-xl mx-auto"><h2 className="text-xl font-black mb-3">📕 我的錯題簿</h2>{progress.wrongBook.length===0?<div className="bg-white rounded-2xl p-8 text-center text-slate-400">目前沒有錯題。</div>:<div className="space-y-3">{[...progress.wrongBook].reverse().map((x,i)=><div key={i} className="bg-white rounded-2xl border border-slate-200 p-4"><div className="text-xs font-bold text-red-600 mb-2">{x.error} · {x.mode}</div><div className="bg-slate-50 rounded-xl p-3 text-center"><Latex content={x.latex}/></div><div className="text-xs mt-2"><b>答案：</b><Latex content={x.ans}/></div></div>)}</div>}<button onClick={()=>setScreen("home")} className="w-full mt-4 bg-slate-900 text-white rounded-xl py-3 font-black">返回</button></div></div>;
+
+ const Stats=()=>{
+   const top=Object.entries(progress.errors).sort((a,b)=>b[1]-a[1]).slice(0,3);
+   const handleClear = () => {
+     if(confirm("確定要清除所有學習紀錄並重設數據嗎？此操作無法復原。")){
+       localStorage.removeItem("dse_indices_v2");
+       setProgress(baseProgress);
+       alert("所有數據已成功重設！");
+     }
+   };
+   return <div className="flex-1 overflow-y-auto p-4"><div className="max-w-xl mx-auto space-y-3"><h2 className="text-xl font-black">📊 學習報告</h2><div className="bg-white rounded-2xl border border-slate-200 p-4"><div className="text-3xl font-black">{accuracy}%</div><div className="text-xs text-slate-400">總體正確率</div><div className="mt-4 space-y-3"><Skill name="初階" val={progress.skill.basic}/><Skill name="DSE" val={progress.skill.dse}/><Skill name="挑戰" val={progress.skill.challenge}/></div></div><div className="bg-white rounded-2xl border border-slate-200 p-4"><div className="font-black mb-2">最常出現的錯誤</div>{top.map(([k,v],i)=><div key={k} className="flex justify-between py-2 border-b last:border-0 text-sm"><span>{i+1}. {k}</span><b className="text-red-600">{v} 次</b></div>)}</div><div className="bg-white rounded-2xl border border-slate-200 p-4"><div className="font-black mb-2">🏆 成就</div>{achievements.map(([id,n,d])=><div key={id} className={`flex gap-3 p-2 rounded-xl ${progress.achievements.includes(id)?"bg-amber-50":"bg-slate-50 opacity-45"}`}><div className="text-xl">{progress.achievements.includes(id)?"🏆":"🔒"}</div><div><b className="text-sm">{n}</b><div className="text-xs text-slate-400">{d}</div></div></div>)}</div><button onClick={handleClear} className="w-full text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 rounded-xl py-3 font-black text-sm transition">🗑️ 清除所有數據 / 重設紀錄</button><button onClick={()=>setScreen("home")} className="w-full bg-slate-900 text-white rounded-xl py-3 font-black">返回</button></div></div>;
+ };
+
+ return <div className="h-full max-w-4xl mx-auto bg-slate-50 flex flex-col shadow-xl"><Header/>{screen==="home"&&<Home/>}{screen==="play"&&q&&<Play/>}{screen==="summary"&&<Summary/>}{screen==="wrong"&&<Wrong/>}{screen==="stats"&&<Stats/>}</div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
